@@ -547,7 +547,8 @@ typedef uint64_t return_t;
 #define COPY_ARG7(dest, src)   COPY_ARG(dest, src, "rcx")
 #define COPY_ARG8(dest, src)   COPY_ARG(dest, src, "r11")
 
-#define SCRATCH_REGS "rax", "rdi", "rsi", "rdx", "rcx", "r8", "r9", "r10", "r11"
+/*#define SCRATCH_REGS "rax", "rdi", "rsi", "rdx", "rcx", "r8", "r9", "r10", "r11"*/
+#define SCRATCH_REGS 
 
 // .bytes are jnb +3
 #define SYS_CALL_ASM \
@@ -747,7 +748,6 @@ static uint64_t scc_syscall8(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64
 
 #define PRE_CONDITION(reg, var) __asm__("mov %0, " reg : "=r"(var))
 
-int main(int argc, char **argv, char **envp, char **apple);
 
 #include <stdio.h>
 #include <stdint.h>
@@ -792,18 +792,41 @@ struct dyld_cache_image_info
     uint32_t    pad;
 };
 
+void * get_dlsym_addr();
+typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
+typedef int (*printf_ptr)( const char * format, ... );
+
+int main(int argc, char **argv, char **envp, char **apple)
+{
+	void * dlsym_addr = get_dlsym_addr();
+	dlsym_ptr dlsym_func = dlsym_addr;
+
+  printf_ptr printf_func = dlsym_func(RTLD_DEFAULT, "printf");
+  printf_func("Hello world!\n");
+
+	//dump_dyld_shared_cache();
+	//dlopenaddr();
+	//dlopen("./log", RTLD_NOW);
+	/*NSLog(@"dlsym %p", dlsym);*/
+	/*NSLog(@"dlsym_func %p", dlsym_func);*/
+	/*NSLog(@"strcpy %p", strcpy);*/
+	/*NSLog(@"strcpy %p", dlsym_func(RTLD_DEFAULT, "strcpy"));*/
+
+  return 0;
+}
+
 void * get_dlsym_addr() 
 {
-		void* shared_region_start;
+		uint64_t shared_region_start;
     scc_shared_region_check_np(&shared_region_start); // 294
     /*NSLog(@"shared_region_start %p", shared_region_start);*/
 
-    struct dyld_cache_header *header = shared_region_start;
-    struct shared_file_mapping *sfm = shared_region_start + header->mappingOffset;
-		void* vm_slide_offset  = shared_region_start - sfm->address;
+    struct dyld_cache_header *header = (void*)shared_region_start;
+    struct shared_file_mapping *sfm = (void*)header + header->mappingOffset;
+		void* vm_slide_offset  = (void*)header - sfm->address;
 		/*NSLog(@"vm_slide_offset %p\n",  vm_slide_offset);*/
 
-    struct dyld_cache_image_info *dcimg = shared_region_start + header->imagesOffset;
+    struct dyld_cache_image_info *dcimg = (void*)header + header->imagesOffset;
 		void * libdyld_address;
     for (size_t i=0; i < header->imagesCount; i++) {
 			char * pathFile = (char *)shared_region_start+dcimg->pathFileOffset;
@@ -842,16 +865,12 @@ void * get_dlsym_addr()
 		}
 		//NSLog(@"main %p, dlopen %p, dlsym %p", main, dlopen, dlsym);
 
-		//unsigned int vm_slide = (unsigned long)mh - (unsigned long)text_cmd->vmaddr;
 		unsigned int file_slide = ((unsigned long)linkedit_cmd->vmaddr - (unsigned long)text_cmd->vmaddr) - linkedit_cmd->fileoff;
-		struct nlist_64 *symbase = (struct nlist*)((unsigned long)mh + (symtab_cmd->symoff + file_slide));
+		struct nlist_64 *sym = (struct nlist_64*)((unsigned long)mh + (symtab_cmd->symoff + file_slide));
 		char *strings = (char*)((unsigned long)mh + (symtab_cmd->stroff + file_slide));
-		struct nlist_64 *sym;
 
-		int index;
-		for (index = 0, sym = symbase; index < symtab_cmd->nsyms; index += 1, sym += 1)
-		{
-			if (sym->n_un.n_strx != NULL)
+		for (uint32_t i = 0; i < symtab_cmd->nsyms; ++i) {
+			if (sym->n_un.n_strx)
 			{
 				char * symbol = strings + sym->n_un.n_strx;
 				if (strcmp(symbol, "_dlsym") == 0) {
@@ -859,31 +878,11 @@ void * get_dlsym_addr()
 					return sym->n_value + vm_slide_offset;
 				}
 			}
+      sym += 1;
 		}
 		return 0;
 }
 
-typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
-typedef int (*printf_ptr)( const char * format, ... );
-
-int main(int argc, char **argv, char **envp, char **apple)
-{
-	void * dlsym_addr = get_dlsym_addr();
-	dlsym_ptr dlsym_func = dlsym_addr;
-
-  printf_ptr printf_func = dlsym_func(RTLD_DEFAULT, "printf");
-  printf_func("Hello world!\n");
-
-	//dump_dyld_shared_cache();
-	//dlopenaddr();
-	//dlopen("./log", RTLD_NOW);
-	/*NSLog(@"dlsym %p", dlsym);*/
-	/*NSLog(@"dlsym_func %p", dlsym_func);*/
-	/*NSLog(@"strcpy %p", strcpy);*/
-	/*NSLog(@"strcpy %p", dlsym_func(RTLD_DEFAULT, "strcpy"));*/
-
-  return 0;
-}
 
 static return_t scc_nosys(void) {
   return scc_syscall0(POSIX_CALL_NUM(0));
