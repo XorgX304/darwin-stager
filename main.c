@@ -794,23 +794,33 @@ struct dyld_cache_image_info
 
 void * get_dlsym_addr();
 typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
-typedef int (*printf_ptr)( const char * format, ... );
+typedef void* (*dlopen_ptr)(const char *filename, int flag);
+typedef int (*printf_ptr)(const char * format, ...);
+typedef void (*AudioServicesPlayAlertSound_ptr)(uint32_t inSystemSoundID);
 
 int main(int argc, char **argv, char **envp, char **apple)
 {
-	void * dlsym_addr = get_dlsym_addr();
-	dlsym_ptr dlsym_func = dlsym_addr;
+  void * dlsym_addr = get_dlsym_addr();
+  dlsym_ptr dlsym_func = dlsym_addr;
 
   printf_ptr printf_func = dlsym_func(RTLD_DEFAULT, "printf");
   printf_func("Hello world!\n");
 
-	//dump_dyld_shared_cache();
-	//dlopenaddr();
-	//dlopen("./log", RTLD_NOW);
-	/*NSLog(@"dlsym %p", dlsym);*/
-	/*NSLog(@"dlsym_func %p", dlsym_func);*/
-	/*NSLog(@"strcpy %p", strcpy);*/
-	/*NSLog(@"strcpy %p", dlsym_func(RTLD_DEFAULT, "strcpy"));*/
+  dlopen_ptr dlopen_func = dlsym_func(RTLD_DEFAULT, "dlopen");
+  printf_func("dlopen %p!\n", dlopen_func);
+  void * handle = dlopen_func("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_NOW);
+  printf_func("Audio %p!\n", handle);
+  AudioServicesPlayAlertSound_ptr AudioServicesPlayAlertSound_func = dlsym_func(handle, "AudioServicesPlayAlertSound");
+  printf_func("Audio %p!\n", AudioServicesPlayAlertSound_func);
+  AudioServicesPlayAlertSound_func(0x00000FFF);
+
+  //dump_dyld_shared_cache();
+  //dlopenaddr();
+  //dlopen("./log", RTLD_NOW);
+  /*NSLog(@"dlsym %p", dlsym);*/
+  /*NSLog(@"dlsym_func %p", dlsym_func);*/
+  /*NSLog(@"strcpy %p", strcpy);*/
+  /*NSLog(@"strcpy %p", dlsym_func(RTLD_DEFAULT, "strcpy"));*/
 
   return 0;
 }
