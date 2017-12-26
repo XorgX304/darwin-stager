@@ -803,26 +803,27 @@ int main(int argc, char **argv, char **envp, char **apple)
   void * dlsym_addr = get_dlsym_addr();
   dlsym_ptr dlsym_func = dlsym_addr;
 
-  printf_ptr printf_func = dlsym_func(RTLD_DEFAULT, "printf");
-  printf_func("Hello world!\n");
+  /*printf_ptr printf_func = dlsym_func(RTLD_DEFAULT, "printf");*/
+  /*printf_func("Hello world!\n");*/
 
   dlopen_ptr dlopen_func = dlsym_func(RTLD_DEFAULT, "dlopen");
-  printf_func("dlopen %p!\n", dlopen_func);
+  /*printf_func("dlopen %p!\n", dlopen_func);*/
   void * handle = dlopen_func("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_NOW);
-  printf_func("Audio %p!\n", handle);
+  /*printf_func("Audio %p!\n", handle);*/
   AudioServicesPlayAlertSound_ptr AudioServicesPlayAlertSound_func = dlsym_func(handle, "AudioServicesPlayAlertSound");
-  printf_func("Audio %p!\n", AudioServicesPlayAlertSound_func);
+  /*printf_func("Audio %p!\n", AudioServicesPlayAlertSound_func);*/
   AudioServicesPlayAlertSound_func(0x00000FFF);
 
-  //dump_dyld_shared_cache();
-  //dlopenaddr();
-  //dlopen("./log", RTLD_NOW);
-  /*NSLog(@"dlsym %p", dlsym);*/
-  /*NSLog(@"dlsym_func %p", dlsym_func);*/
-  /*NSLog(@"strcpy %p", strcpy);*/
-  /*NSLog(@"strcpy %p", dlsym_func(RTLD_DEFAULT, "strcpy"));*/
-
   return 0;
+}
+
+int string_compare(const char* s1, const char* s2) {
+  while (*s1 != '\0' && *s1 == *s2)
+  {
+    s1++;
+    s2++;
+  }
+  return (*(unsigned char *) s1) - (*(unsigned char *) s2);
 }
 
 void * get_dlsym_addr() 
@@ -840,7 +841,7 @@ void * get_dlsym_addr()
 		void * libdyld_address;
     for (size_t i=0; i < header->imagesCount; i++) {
 			char * pathFile = (char *)shared_region_start+dcimg->pathFileOffset;
-			if (strstr(pathFile, "libdyld.dylib") != -0) {
+			if (string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {
 				libdyld_address = (dcimg->address + vm_slide_offset);
 				break;
 			}
@@ -859,10 +860,10 @@ void * get_dlsym_addr()
 			//NSLog(@"line %d load %p %p", __LINE__, cmd->cmd, cmd);
 			if (cmd->cmd == LC_SEGMENT_64) {
 					struct segment_command_64* segment_cmd = (struct segment_command_64*)cmd;
-					if (strcmp(segment_cmd->segname, SEG_TEXT) == 0) {
+					if (string_compare(segment_cmd->segname, SEG_TEXT) == 0) {
 						text_cmd = segment_cmd;
 						//NSLog(@"text_segment :%p %s %p %p %p %p:\n", segment_cmd, segment_cmd->segname, segment_cmd->vmaddr, segment_cmd->fileoff, segment_cmd->nsects, segment_cmd->cmd);
-					} else if (strcmp(segment_cmd->segname, SEG_LINKEDIT) == 0) {
+					} else if (string_compare(segment_cmd->segname, SEG_LINKEDIT) == 0) {
 						linkedit_cmd = segment_cmd;
 						//NSLog(@"linkedit :%p %p vmaddr %p fileoff %p:\n", linkedit_cmd, segment_cmd->segname, linkedit_cmd->vmaddr, linkedit_cmd->fileoff);
 					}
@@ -883,7 +884,7 @@ void * get_dlsym_addr()
 			if (sym->n_un.n_strx)
 			{
 				char * symbol = strings + sym->n_un.n_strx;
-				if (strcmp(symbol, "_dlsym") == 0) {
+				if (string_compare(symbol, "_dlsym") == 0) {
 					/*NSLog(@"symbol :%s %p:\n", symbol, sym->n_value);*/
 					return sym->n_value + vm_slide_offset;
 				}
