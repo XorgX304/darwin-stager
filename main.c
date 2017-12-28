@@ -5,6 +5,7 @@
 
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
+#include <mach-o/dyld.h>
 
 #include <stdint.h>
 #include <fcntl.h>
@@ -797,22 +798,76 @@ typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
 typedef void* (*dlopen_ptr)(const char *filename, int flag);
 typedef int (*printf_ptr)(const char * format, ...);
 typedef void (*AudioServicesPlayAlertSound_ptr)(uint32_t inSystemSoundID);
+typedef NSObjectFileImageReturnCode (*NSCreateObjectFileImageFromMemory_ptr)(void *address, unsigned long size, NSObjectFileImage *objectFileImage);
+typedef NSModule (*NSLinkModule_ptr)(NSObjectFileImage objectFileImage, const char* moduleName, unsigned long options);
 
 int main(int argc, char **argv, char **envp, char **apple)
 {
   void * dlsym_addr = get_dlsym_addr();
   dlsym_ptr dlsym_func = dlsym_addr;
 
-  /*printf_ptr printf_func = dlsym_func(RTLD_DEFAULT, "printf");*/
-  /*printf_func("Hello world!\n");*/
+  printf_ptr printf_func = dlsym_func(RTLD_DEFAULT, "printf");
+  printf_func("Hello world!\n");
 
   dlopen_ptr dlopen_func = dlsym_func(RTLD_DEFAULT, "dlopen");
+
   /*printf_func("dlopen %p!\n", dlopen_func);*/
-  void * handle = dlopen_func("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_NOW);
+  /*void * handle = dlopen_func("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_NOW);*/
   /*printf_func("Audio %p!\n", handle);*/
-  AudioServicesPlayAlertSound_ptr AudioServicesPlayAlertSound_func = dlsym_func(handle, "AudioServicesPlayAlertSound");
+  /*AudioServicesPlayAlertSound_ptr AudioServicesPlayAlertSound_func = dlsym_func(handle, "AudioServicesPlayAlertSound");*/
   /*printf_func("Audio %p!\n", AudioServicesPlayAlertSound_func);*/
-  AudioServicesPlayAlertSound_func(0x00000FFF);
+  /*[>AudioServicesPlayAlertSound_func(0x00000FFF);<]*/
+  /*AudioServicesPlayAlertSound_func(0x000003ea);*/
+
+  NSCreateObjectFileImageFromMemory_ptr NSCreateObjectFileImageFromMemory_func = dlsym(RTLD_DEFAULT, "NSCreateObjectFileImageFromMemory");
+  printf_func("image %p!\n", NSCreateObjectFileImageFromMemory_func);
+
+  /*NSObjectFileImageReturnCode(*create_file_image_from_memory)(const void *, size_t, NSObjectFileImage *) = NULL;*/
+  /*NSModule (*link_module)(NSObjectFileImage, const char *, unsigned long) = NULL;*/
+
+	/*create_file_image_from_memory = (NSObjectFileImageReturnCode (*)(const void *, size_t, NSObjectFileImage *)) addr;*/
+	/*link_module = (NSModule (*)(NSObjectFileImage, const char *, unsigned long)) addr;*/
+
+	/*// change the filetype to a bundle*/
+	/*int type = ((int *)binbuf)[3];*/
+	/*if(type != 0x8) ((int *)binbuf)[3] = 0x8; //change to mh_bundle type*/
+
+	/*// create file image*/
+	/*NSObjectFileImage fi; */
+	/*if(create_file_image_from_memory(binbuf, size, &fi) != 1) {*/
+		/*fprintf(stderr, "Could not create image.\n");*/
+		/*goto err;*/
+	/*}*/
+
+	/*// link image*/
+	/*NSModule nm = link_module(fi, "mytest", NSLINKMODULE_OPTION_PRIVATE |*/
+														/*NSLINKMODULE_OPTION_BINDNOW);*/
+	/*if(!nm) {*/
+		/*fprintf(stderr, "Could not link image.\n");*/
+		/*goto err;*/
+	/*}*/
+
+	/*// find entry point and call it*/
+	/*if(type == 0x2) { //mh_execute*/
+		/*unsigned long execute_base;*/
+		/*struct entry_point_command *epc;*/
+
+		/*if(find_macho((unsigned long)nm, &execute_base, sizeof(int), 1)) {*/
+			/*fprintf(stderr, "Could not find execute_base.\n");*/
+			/*goto err;*/
+		/*}*/
+
+		/*if(find_epc(execute_base, &epc)) {*/
+			/*fprintf(stderr, "Could not find ec.\n");*/
+			/*goto err;*/
+		/*}*/
+
+		/*int(*main)(int, char**, char**, char**) = (int(*)(int, char**, char**, char**))(execute_base + epc->entryoff); */
+		/*char *argv[]={"test", NULL};*/
+		/*int argc = 1;*/
+		/*char *env[] = {NULL};*/
+		/*char *apple[] = {NULL};*/
+		/*return main(argc, argv, env, apple);*/
 
   return 0;
 }
@@ -826,31 +881,92 @@ int string_compare(const char* s1, const char* s2) {
   return (*(unsigned char *) s1) - (*(unsigned char *) s2);
 }
 
+void hex(char* data2, size_t data_length) {
+  char const hex_chars[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+  char data[8] = "abcd";
+  char output[4] = "";
+  for( int i = 0; i < data_length; i++ )
+  {
+    char const byte = data[i];
+    /*output[0] = byte;*/
+    /*output[1] = '\n';*/
+    /*output[2] = '\n';*/
+    /*scc_write(STDOUT_FILENO, output, 2);*/
+    /*output[0] = hex_chars[ 0 ];*/
+    /*output[1] = hex_chars[ 1 ];*/
+    /*output[2] = '\n';*/
+    /*scc_write(STDOUT_FILENO, output, 3);*/
+    /*output[0] = 'a' + (( byte & 0xF0 ) >> 4);*/
+    /*output[1] = 'a' + (( byte & 0x0F ) >> 0);*/
+    /*output[2] = '\n';*/
+    /*scc_write(STDOUT_FILENO, output, 3);*/
+    output[0] = hex_chars[ ( byte & 0xF0 ) >> 4 ];
+    output[1] = hex_chars[ ( byte & 0x0F ) >> 0 ];
+    scc_write(STDOUT_FILENO, output, 2);
+  }
+  scc_write(STDOUT_FILENO, "\n", 1);
+}
+
 void * get_dlsym_addr() 
 {
-		uint64_t shared_region_start;
-    scc_shared_region_check_np(&shared_region_start); // 294
-    /*NSLog(@"shared_region_start %p", shared_region_start);*/
+  uint64_t shared_region_start = 0;
+  /*uint64_t shared_region_start = 0x00007fff5fc00000;*/
+  /*void* shared_region_start;*/
+  scc_shared_region_check_np(&shared_region_start);
 
+      /*char output[1000] = "a\n";*/
     struct dyld_cache_header *header = (void*)shared_region_start;
+    scc_write(STDOUT_FILENO, "slid\n", 5);
+    /*hex("aaaa", 4);*/
+    printf("baaaaaac\n");
+    /*hex("baaaaaac", 4);*/
+      scc_write(STDOUT_FILENO, "data\n", 5);
+      scc_write(STDOUT_FILENO, header->magic, 16);
     struct shared_file_mapping *sfm = (void*)header + header->mappingOffset;
 		void* vm_slide_offset  = (void*)header - sfm->address;
-		/*NSLog(@"vm_slide_offset %p\n",  vm_slide_offset);*/
+    /*NSLog(@"vm_slide_offset %p\n",  vm_slide_offset);*/
+
+    /*scc_write(STDOUT_FILENO, header->magic, 5);*/
 
     struct dyld_cache_image_info *dcimg = (void*)header + header->imagesOffset;
-		void * libdyld_address;
-    for (size_t i=0; i < header->imagesCount; i++) {
-			char * pathFile = (char *)shared_region_start+dcimg->pathFileOffset;
-			if (string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {
-				libdyld_address = (dcimg->address + vm_slide_offset);
-				break;
-			}
+    void * libdyld_address;
+    scc_write(STDOUT_FILENO, "slid\n", 5);
+    if (header->imagesOffset == 0) {
+      scc_write(STDOUT_FILENO, "1259\n", 5);
+    }
+    if (header->imagesCount == 1259) {
+      scc_write(STDOUT_FILENO, "1259\n", 5);
+    }
+    size_t count = header->imagesCount;
+    for (size_t i=0; i < count; i++) {
+
+      if (dcimg->pathFileOffset) {
+        scc_write(STDOUT_FILENO, "a\n", 2);
+      }
+      scc_write(STDOUT_FILENO, "\n", 1);
+      printf("%d\n", 0);
+			char * pathFile = (char *)header+dcimg->pathFileOffset;
+      /*scc_write(STDOUT_FILENO, pathFile, strlen(pathFile));*/
+      /*int i=0;*/
+      /*while(i < 2){*/
+        /*output[i] = pathFile[i];*/
+        /*if (pathFile[i] == 0) {*/
+          /*break;*/
+        /*}*/
+        /*i++;*/
+      /*}*/
+      /*scc_write(STDOUT_FILENO, pathFile, 10);*/
+      if (pathFile && string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {
+        libdyld_address = (dcimg->address + vm_slide_offset);
+        break;
+      }
 			dcimg++;
     }
 
     //NSLog(@"line %d libdyld_address %p %p", __LINE__, libdyld_address, *(uint32_t*)libdyld_address);
 
 		struct mach_header_64 *mh = (struct mach_header_64*)libdyld_address;
+  /*scc_shared_region_check_np((&mh) + 1); // 294*/
 		const struct load_command* cmd = (struct load_command*)(((char*)mh)+sizeof(struct mach_header_64));
 		struct symtab_command* symtab_cmd = 0;
 		struct segment_command_64* linkedit_cmd = 0;
@@ -858,6 +974,9 @@ void * get_dlsym_addr()
 
 		for (uint32_t i = 0; i < mh->ncmds; ++i) {
 			//NSLog(@"line %d load %p %p", __LINE__, cmd->cmd, cmd);
+  /*scc_shared_region_check_np((&shared_region_start) + 1); // 294*/
+  /*scc_shared_region_check_np((void*)mh->ncmds); // 294*/
+  /*scc_shared_region_check_np((&cmd) + 1); // 294*/
 			if (cmd->cmd == LC_SEGMENT_64) {
 					struct segment_command_64* segment_cmd = (struct segment_command_64*)cmd;
 					if (string_compare(segment_cmd->segname, SEG_TEXT) == 0) {
@@ -873,6 +992,7 @@ void * get_dlsym_addr()
 				//NSLog(@"symtab :%p %d %p %p %p:\n", symtab_cmd, symtab_cmd->nsyms, symtab_cmd->symoff, symtab_cmd->stroff, symtab_cmd->strsize);
 			}
 			cmd = (const struct load_command*)(((char*)cmd)+cmd->cmdsize);
+  /*scc_shared_region_check_np(&shared_region_start); // 294*/
 		}
 		//NSLog(@"main %p, dlopen %p, dlsym %p", main, dlopen, dlsym);
 
