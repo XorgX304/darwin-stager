@@ -1,7 +1,7 @@
 CFLAGS=-fno-stack-protector -fomit-frame-pointer -fno-exceptions -fPIC
 SDK=`xcrun --sdk iphoneos --show-sdk-path`
 GCC_BIN=`xcrun --sdk iphoneos -f gcc`
-GCC_BASE=$(GCC_BIN) -Os $(CFLAGS) -Wimplicit -isysroot $(SDK)
+GCC_BASE=$(GCC_BIN) $(CFLAGS) -Wimplicit -isysroot $(SDK)
 GCC=$(GCC_BASE) -arch arm64
 
 SDK_OSX=`xcrun --sdk macosx --show-sdk-path`

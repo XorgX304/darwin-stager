@@ -807,9 +807,10 @@ int main(int argc, char **argv, char **envp, char **apple)
   dlsym_ptr dlsym_func = dlsym_addr;
 
   printf_ptr printf_func = dlsym_func(RTLD_DEFAULT, "printf");
-  printf_func("Hello world!\n");
+  printf_func("Hello world! %d,%d\n", SIGPIPE, SIG_IGN);
 
   dlopen_ptr dlopen_func = dlsym_func(RTLD_DEFAULT, "dlopen");
+  printf_func("dlopen! %p\n", dlopen_func);
 
   /*printf_func("dlopen %p!\n", dlopen_func);*/
   /*void * handle = dlopen_func("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_NOW);*/
@@ -913,39 +914,24 @@ void * get_dlsym_addr()
   /*uint64_t shared_region_start = 0x00007fff5fc00000;*/
   /*void* shared_region_start;*/
   scc_shared_region_check_np(&shared_region_start);
+  /*shared_region_check_np();*/
 
       /*char output[1000] = "a\n";*/
     struct dyld_cache_header *header = (void*)shared_region_start;
-    scc_write(STDOUT_FILENO, "slid\n", 5);
-    /*hex("aaaa", 4);*/
-    printf("baaaaaac\n");
-    /*hex("baaaaaac", 4);*/
-      scc_write(STDOUT_FILENO, "data\n", 5);
-      scc_write(STDOUT_FILENO, header->magic, 16);
     struct shared_file_mapping *sfm = (void*)header + header->mappingOffset;
 		void* vm_slide_offset  = (void*)header - sfm->address;
-    /*NSLog(@"vm_slide_offset %p\n",  vm_slide_offset);*/
-
-    /*scc_write(STDOUT_FILENO, header->magic, 5);*/
-
     struct dyld_cache_image_info *dcimg = (void*)header + header->imagesOffset;
     void * libdyld_address;
-    scc_write(STDOUT_FILENO, "slid\n", 5);
-    if (header->imagesOffset == 0) {
-      scc_write(STDOUT_FILENO, "1259\n", 5);
-    }
-    if (header->imagesCount == 1259) {
-      scc_write(STDOUT_FILENO, "1259\n", 5);
-    }
     size_t count = header->imagesCount;
     for (size_t i=0; i < count; i++) {
-
-      if (dcimg->pathFileOffset) {
-        scc_write(STDOUT_FILENO, "a\n", 2);
+      uint32_t offset = dcimg->pathFileOffset;
+      if (!offset) {
+        dcimg++;
+        continue;
       }
-      scc_write(STDOUT_FILENO, "\n", 1);
-      printf("%d\n", 0);
-			char * pathFile = (char *)header+dcimg->pathFileOffset;
+        /*printf("%p\n", offset);*/
+      /*scc_write(STDOUT_FILENO, "a", 1);*/
+			char * pathFile = (char*)header + offset;
       /*scc_write(STDOUT_FILENO, pathFile, strlen(pathFile));*/
       /*int i=0;*/
       /*while(i < 2){*/
@@ -956,7 +942,7 @@ void * get_dlsym_addr()
         /*i++;*/
       /*}*/
       /*scc_write(STDOUT_FILENO, pathFile, 10);*/
-      if (pathFile && string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {
+      if (string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {
         libdyld_address = (dcimg->address + vm_slide_offset);
         break;
       }
