@@ -810,12 +810,29 @@ unsigned long resolve_symbol(unsigned long base, char* symbol);
 
 int main(int argc, char **argv, char **envp, char **apple)
 {
-  printf_ptr printf_func = printf;
-  printf_func("Hello world! %d,%d\n", SIGPIPE, SIG_IGN);
+  long write = 0x2000004; /* syscall "write" on MacOS X */
+  long stdout = 1;
+  char * str = "Hello World\n";
+  unsigned long len = 12;
+  unsigned long ret = 0;
+  /* ret = write(stdout, str, len); */
+  __asm__("movq %1, %%rax;\n"
+          "movq %2, %%rdi;\n"
+          "movq %3, %%rsi;\n"
+          "movq %4, %%rdx;\n"
+          "syscall;\n"
+          "movq %%rax, %0;\n"
+          : "=g"(ret)
+          : "g"(write), "g"(stdout), "g"(str), "g"(len)
+          : ); /* assign from generic registers to syscall registers */
+  printf_ptr printf_func = 0;
+  /*printf_ptr printf_func = printf;*/
+  /*printf_func("Hello world! %d,%d\n", SIGPIPE, SIG_IGN);*/
 
   void * dlsym_addr = get_dlsym_addr();
   dlsym_ptr dlsym_func = dlsym_addr;
 
+  /*printf_func("dyld world! %p\n", dlsym_func(RTLD_DEFAULT, "printf");*/
   uint64_t binary = 0;
   uint64_t dyld = 0;
 
@@ -889,12 +906,12 @@ int main(int argc, char **argv, char **envp, char **apple)
       return 4;
     }
 
-    int(*main)(int, char**, char**, char**) = (int(*)(int, char**, char**, char**))(execute_base + epc->entryoff);
+    int(*main_func)(int, char**, char**, char**) = (int(*)(int, char**, char**, char**))(execute_base + epc->entryoff);
     char *argv[]={"test", NULL};
     int argc = 1;
     char *env[] = {NULL};
     char *apple[] = {NULL};
-    return main(argc, argv, env, apple);
+    return main_func(argc, argv, env, apple);
   }
 
   return 0;
