@@ -73,8 +73,8 @@ int main(int argc, char** argv);
 void * get_dyld_function(const char* function_symbol);
 uint64_t syscall_chmod(uint64_t path, long mode);
 uint64_t syscall_shared_region_check_np();
-
 uint32_t syscall_write(uint32_t fd, const char* buf, uint32_t size);
+uint64_t find_macho(uint64_t addr, unsigned int increment, unsigned int pointer);
 void init();
 
 int main(int argc, char** argv)
@@ -130,32 +130,34 @@ void init()
 
   /*print_dyld_function(printf_func);*/
 
-  /*uint64_t binary = find_macho(0x120000000, 0x1000, 0);*/
-  /*printf_func("binary %p\n", (void*)binary);*/
-  /*uint64_t dyld = find_macho(binary + 0x1000, 0x1000, 0);*/
-  /*printf_func("dyld %p\n", (void*)dyld);*/
+  uint64_t binary = find_macho(0x100000000, 0x1000, 0);
+  printf_func("binary %p\n", (void*)binary);
+  uint64_t dyld = find_macho(binary + 0x1000, 0x1000, 0);
+  printf_func("dyld %p\n", (void*)dyld);
+  uint64_t firstlib = find_macho(dyld + 0x1000, 0x1000, 0);
+  printf_func("system %p\n", (void*)firstlib);
   /*printf_func("shared %p\n", (void*)shared_region_check);*/
-  return;
 
   typedef void (*func_ptr)();
   func_ptr func = (func_ptr)0x4545454545;
 /*#ifdef __x86_64*/
-#ifdef __aarch64__
-	volatile register uint64_t x0 asm("x0") = 0x45454541;
-	volatile register uint64_t x1 asm("x1") = (uint64_t)dlsym_func;
-	volatile register uint64_t x2 asm("x2") = (uint64_t)libsystem;
-	volatile register uint64_t x3 asm("x3") = (uint64_t)asl_log_func;
-	volatile register uint64_t x4 asm("x4") = (uint64_t)0x79;
-  asm volatile (
-      "mov x0, %0\n\t"
-      "mov x1, %1\n\t"
-      "mov x2, %2\n\t"
-      "mov x3, %3\n\t"
-      "mov x4, %4\n\t"
-      :
-      : "r"(x0), "r"(x1), "r"(x2), "r"(x3), "r"(x4)
-      : "x0", "x1", "x2", "x3", "x4");
-#endif
+/*#ifdef __aarch64__*/
+  /*volatile register uint64_t x0 asm("x0") = 0x45454541;*/
+  /*volatile register uint64_t x1 asm("x1") = (uint64_t)dlsym_func;*/
+  /*volatile register uint64_t x2 asm("x2") = (uint64_t)libsystem;*/
+  /*volatile register uint64_t x3 asm("x3") = (uint64_t)asl_log_func;*/
+  /*volatile register uint64_t x4 asm("x4") = (uint64_t)0x79;*/
+  /*asm volatile (*/
+      /*"mov x0, %0\n\t"*/
+      /*"mov x1, %1\n\t"*/
+      /*"mov x2, %2\n\t"*/
+      /*"mov x3, %3\n\t"*/
+      /*"mov x4, %4\n\t"*/
+      /*:*/
+      /*: "r"(x0), "r"(x1), "r"(x2), "r"(x3), "r"(x4)*/
+      /*: "x0", "x1", "x2", "x3", "x4");*/
+/*#endif*/
+  fflush(stdout);
   func();
 }
 
@@ -312,6 +314,8 @@ void * get_dyld_function(const char* function_symbol)
     cmd = (const struct load_command*)(((char*)cmd)+cmd->cmdsize);
   }
 
+  printf("text_cmd %p\n", text_cmd);
+
   unsigned int file_slide = ((unsigned long)linkedit_cmd->vmaddr - (unsigned long)text_cmd->vmaddr) - linkedit_cmd->fileoff;
   nlist_t *sym = (nlist_t*)((unsigned long)mh + (symtab_cmd->symoff + file_slide));
   char *strings = (char*)((unsigned long)mh + (symtab_cmd->stroff + file_slide));
@@ -333,4 +337,20 @@ void * get_dyld_function(const char* function_symbol)
   return 0;
 }
 
+uint64_t find_macho(uint64_t addr, unsigned int increment, unsigned int pointer) 
+{
+  while(1) {
+    uint64_t ptr = addr;
+    if (pointer) {
+      ptr = *(uint64_t *)ptr;
+    }
+    unsigned long ret = syscall_chmod(ptr, 0777);
+    if (ret == 0x2 && ((int *)ptr)[0] == MH_MAGIC_64) {
+      return ptr;
+    }
+
+    addr += increment;
+  }
+  return 0;
+}
 
