@@ -1,12 +1,3 @@
-/*
- * References:
- * @parchedmind
- * https://github.com/CylanceVulnResearch/osx_runbin/blob/master/run_bin.c
- *
- * @nologic
- * https://github.com/nologic/shellcc
- */
-
 #include <stdio.h>
 #include <string.h>
 
@@ -25,13 +16,25 @@ typedef struct mach_header_64 mach_header_t;
 typedef struct segment_command_64 segment_command_t;
 typedef struct section_64 section_t;
 typedef struct nlist_64 nlist_t;
+#define MH_MAGIC_T MH_MAGIC_64
 #define LC_SEGMENT_T LC_SEGMENT_64
 #else
 typedef struct mach_header mach_header_t;
 typedef struct segment_command segment_command_t;
 typedef struct section section_t;
 typedef struct nlist nlist_t;
+#define MH_MAGIC_T MH_MAGIC
 #define LC_SEGMENT_T LC_SEGMENT
+#endif
+
+//https://github.com/opensource-apple/dyld/blob/master/configs/dyld.xcconfig - iOS 9.3.4
+#ifdef __x86_64
+#define DYLD_BASE_ADDRESS 0x7fff5fc00000
+#elif __arm64
+#define DYLD_BASE_ADDRESS 0x120000000
+#elif __arm
+#define DYLD_BASE_ADDRESS 0x1fe00000
+#else
 #endif
 
 struct dyld_cache_header
@@ -89,6 +92,23 @@ void init()
   /*syscall_write(1, "lal\n", 4);*/
   /*printf("syscall_write done\n");*/
 
+  uint64_t start = DYLD_BASE_ADDRESS;
+  /*if (sierra) {*/
+  /*}*/
+  uint64_t dyld = find_macho(start, 0x1000, 0);
+  printf("dyld %p\n", (void*)dyld);
+
+  /*uint64_t binary = find_macho(DYLD_BASE_ADDRESS, 0x1000, 0);*/
+  /*printf("binary %p\n", (void*)binary);*/
+  /*uint64_t firstlib = find_macho(dyld + 0x1000, 0x1000, 0);*/
+  /*printf("system %p\n", (void*)firstlib);*/
+  uint64_t shared_region_check = syscall_shared_region_check_np();
+  printf("shared %p\n", shared_region_check);
+  fflush(stdout);
+  /*typedef void (*func_ptr)();*/
+  /*func_ptr func = (func_ptr)0x4545454545;*/
+  /*func();*/
+
   /*uint64_t shared_region_check = syscall_shared_region_check_np();*/
   /*printf("shared %p\n", shared_region_check);*/
   /*uint64_t dllookup_func = (uint64_t)get_dlsym_addr();*/
@@ -130,16 +150,7 @@ void init()
 
   /*print_dyld_function(printf_func);*/
 
-  uint64_t binary = find_macho(0x100000000, 0x1000, 0);
-  printf_func("binary %p\n", (void*)binary);
-  uint64_t dyld = find_macho(binary + 0x1000, 0x1000, 0);
-  printf_func("dyld %p\n", (void*)dyld);
-  uint64_t firstlib = find_macho(dyld + 0x1000, 0x1000, 0);
-  printf_func("system %p\n", (void*)firstlib);
-  /*printf_func("shared %p\n", (void*)shared_region_check);*/
 
-  typedef void (*func_ptr)();
-  func_ptr func = (func_ptr)0x4545454545;
 /*#ifdef __x86_64*/
 /*#ifdef __aarch64__*/
   /*volatile register uint64_t x0 asm("x0") = 0x45454541;*/
@@ -157,10 +168,7 @@ void init()
       /*: "r"(x0), "r"(x1), "r"(x2), "r"(x3), "r"(x4)*/
       /*: "x0", "x1", "x2", "x3", "x4");*/
 /*#endif*/
-  fflush(stdout);
-  func();
 }
-
 
 uint32_t syscall_write(uint32_t fd, const char* buf, uint32_t size)
 {
@@ -272,6 +280,8 @@ void * get_dyld_function(const char* function_symbol)
 
   struct dyld_cache_header *header = (void*)shared_region_start;
   /*printf("symbol %p\n", header);*/
+  /*printf("base %p\n", (void*)header->dyldBaseAddress);*/
+  /*fflush(stdout);*/
   struct shared_file_mapping *sfm = (void*)header + header->mappingOffset;
   struct dyld_cache_image_info *dcimg = (void*)header + header->imagesOffset;
   uint64_t libdyld_address;
@@ -345,7 +355,7 @@ uint64_t find_macho(uint64_t addr, unsigned int increment, unsigned int pointer)
       ptr = *(uint64_t *)ptr;
     }
     unsigned long ret = syscall_chmod(ptr, 0777);
-    if (ret == 0x2 && ((int *)ptr)[0] == MH_MAGIC_64) {
+    if (ret == 0x2 && ((int *)ptr)[0] == MH_MAGIC_T) {
       return ptr;
     }
 
