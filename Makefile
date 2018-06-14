@@ -8,7 +8,7 @@ SDK_IOS=`xcrun --sdk iphoneos --show-sdk-path`
 GCC_IOS=$(GCC_BASE_IOS) -arch arm64 -isysroot $(SDK_IOS)
 GCC_IOS_32=$(GCC_BASE_IOS) -arch armv7 -isysroot $(SDK_IOS)
 
-all: clean main_osx main_ios main_ios32
+all: clean main_osx main_ios main_ios32 log
 
 main_osx: main.c
 	$(GCC_OSX) -o $@ $^
@@ -21,12 +21,27 @@ main_ios32: main.c
 	$(GCC_IOS_32) -o $@ $^
 	ldid -S main_ios32
 
-shellcode: main_osx
-	otool -tv main_osx
+log: log.c
+	$(GCC_IOS_32) -o $@ $^
+
+shellcode: main_ios32
+	otool -tv main_ios32
+
+flatten: flatten-macho.m
+	$(GCC_OSX) -o $@ $^
+
+flatten32: flatten-macho32.m
+	$(GCC_OSX) -o $@ $^
+
+main_vm: flatten main_ios
+	./flatten main_ios main_vm
+
+main_vm32: flatten32 main_ios32
+	./flatten32 main_ios32 main_vm32
 
 install: main_ios
 	cp main_ios ../../../../data/meterpreter/aarch64_iphone_darwin_stage
 
 clean:
-	rm -f *.o main_osx main_ios
+	rm -f *.o main_osx main_ios main_ios32
 

@@ -74,6 +74,7 @@ struct dyld_cache_image_info
 long syscall(const long syscall_number, const long arg1, const long arg2, const long arg3, const long arg4, const long arg5, const long arg6);
 int main(int argc, char** argv);
 void * get_dyld_function(const char* function_symbol);
+void resolve_dyld_symbol(uint32_t base);
 uint64_t syscall_chmod(uint64_t path, long mode);
 uint64_t syscall_shared_region_check_np();
 uint32_t syscall_write(uint32_t fd, const char* buf, uint32_t size);
@@ -96,54 +97,48 @@ void init()
   /*if (sierra) {*/
   /*}*/
   uint64_t dyld = find_macho(start, 0x1000, 0);
-  printf("dyld %p\n", (void*)dyld);
+  /*printf("dyld %p\n", (void*)dyld);*/
+
+  /*typedef void (*dyld_start_ptr)(struct macho_header* asl, int argc, char const**argv, int apple);*/
+  /*dyld_start_ptr dyld_start_func = dyld + 0x1000;*/
+  /*char *main_argv[] = { "xk", NULL };*/
+  /*char *jit_region = (void*)init + 0x10000;*/
+  /*memcpy(jit_region, macho_file, sizeof(macho_file));*/
+  /*dyld_start_func((struct macho_header*)jit_region, 1, main_argv, 0);*/
+  typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
+  typedef void* (*dlopen_ptr)(const char *filename, int flags);
+  typedef int (*asl_log_ptr)(aslclient asl, aslmsg msg, int level, const char *format, ...);
+  resolve_dyld_symbol(dyld);
+  /*void* libsystem = dlopen_func("/usr/lib/libSystem.B.dylib", RTLD_NOW);*/
+  /*asl_log_ptr asl_log_func = dlsym_func(libsystem, "asl_log");*/
+  /*asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");*/
+
+  return;
 
   /*uint64_t binary = find_macho(DYLD_BASE_ADDRESS, 0x1000, 0);*/
   /*printf("binary %p\n", (void*)binary);*/
   /*uint64_t firstlib = find_macho(dyld + 0x1000, 0x1000, 0);*/
   /*printf("system %p\n", (void*)firstlib);*/
-  uint64_t shared_region_check = syscall_shared_region_check_np();
-  printf("shared %p\n", shared_region_check);
-  fflush(stdout);
-  /*typedef void (*func_ptr)();*/
-  /*func_ptr func = (func_ptr)0x4545454545;*/
-  /*func();*/
-
   /*uint64_t shared_region_check = syscall_shared_region_check_np();*/
   /*printf("shared %p\n", shared_region_check);*/
-  /*uint64_t dllookup_func = (uint64_t)get_dlsym_addr();*/
-  uint64_t dlsym_addr = (uint64_t)get_dyld_function("_dlsym");
-  printf("dlsym %p\n", dlsym_addr);
-  uint64_t dlopen_addr = (uint64_t)get_dyld_function("_dlopen");
-  printf("dlopen %p\n", dlopen_addr);
-  /*struct dyld_cache_header *header = (void*)shared_region_start;*/
-  /*struct shared_file_mapping *sfm = (void*)header + header->mappingOffset;*/
-  /*void* vm_slide_offset  = (void*)header - sfm->address;*/
-  /*NSLog(@"vm_slide_offset %p\n",  vm_slide_offset);*/
+  /*fflush(stdout);*/
 
-  /*struct dyld_cache_image_info *dcimg = (void*)header + header->imagesOffset;*/
-  /*void * libdyld_address;*/
-  /*for (size_t i=0; i < header->imagesCount; i++) {*/
-    /*char * pathFile = (char *)shared_region_start+dcimg->pathFileOffset;*/
-    /*if (strstr(pathFile, "libdyld.dylib") != -0) {*/
-      /*libdyld_address = (dcimg->address + vm_slide_offset);*/
-      /*break;*/
-    /*}*/
-    /*dcimg++;*/
-  /*}*/
+  /*uint64_t dlsym_addr = (uint64_t)get_dyld_function("_dlsym");*/
+  /*uint64_t dlopen_addr = (uint64_t)get_dyld_function("_dlopen");*/
 
-  typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
-  typedef void* (*dlopen_ptr)(const char *filename, int flags);
-  typedef int (*asl_log_ptr)(aslclient asl, aslmsg msg, int level, const char *format, ...);
-  dlsym_ptr dlsym_func = dlsym_addr;
-  dlopen_ptr dlopen_func = dlopen_addr;
-  void* libsystem = dlopen_func("/usr/lib/libSystem.B.dylib", RTLD_NOW);
-  asl_log_ptr asl_log_func = dlsym_func(libsystem, "asl_log");
-  asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
+  /*typedef void* (*dlsym_ptr)(void *handle, const char *symbol);*/
+  /*typedef void* (*dlopen_ptr)(const char *filename, int flags);*/
+  /*typedef int (*asl_log_ptr)(aslclient asl, aslmsg msg, int level, const char *format, ...);*/
+  /*dlsym_ptr dlsym_func = dlsym_addr;*/
+  /*dlopen_ptr dlopen_func = dlopen_addr;*/
+  /*void* libsystem = dlopen_func("/usr/lib/libSystem.B.dylib", RTLD_NOW);*/
+  /*asl_log_ptr asl_log_func = dlsym_func(libsystem, "asl_log");*/
+  /*asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");*/
 
-  typedef int (*printf_ptr)(const char *format, ...);
-  printf_ptr printf_func = dlsym_func(libsystem, "printf");
-  printf_func("Hello world\n");
+  /*typedef int (*printf_ptr)(const char *format, ...);*/
+  /*printf_ptr printf_func = dlsym_func(libsystem, "printf");*/
+  /*printf_func("Hello world\n");*/
+
   /*printf_global = printf_func;*/
   /*printf_func("start %p\n", get_dyld_function("start"));*/
   /*printf_func("_start %p\n", get_dyld_function("_start"));*/
@@ -288,6 +283,7 @@ void * get_dyld_function(const char* function_symbol)
   for (size_t i=0; i < header->imagesCount; i++) {
     char * pathFile = (char *)shared_region_start+dcimg->pathFileOffset;
     //NSLog(@"pathFile %p %s\n", (void*)dcimg->address, pathFile);
+    /*if (string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {*/
     if (string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {
       //NSLog(@"dyld_address %p\n",  dcimg->address);
       libdyld_address = dcimg->address;
@@ -324,7 +320,7 @@ void * get_dyld_function(const char* function_symbol)
     cmd = (const struct load_command*)(((char*)cmd)+cmd->cmdsize);
   }
 
-  printf("text_cmd %p\n", text_cmd);
+  /*printf("text_cmd %p\n", text_cmd);*/
 
   unsigned int file_slide = ((unsigned long)linkedit_cmd->vmaddr - (unsigned long)text_cmd->vmaddr) - linkedit_cmd->fileoff;
   nlist_t *sym = (nlist_t*)((unsigned long)mh + (symtab_cmd->symoff + file_slide));
@@ -364,3 +360,88 @@ uint64_t find_macho(uint64_t addr, unsigned int increment, unsigned int pointer)
   return 0;
 }
 
+void resolve_dyld_symbol(uint32_t base)
+{
+  struct load_command* lc;
+  struct segment_command* sc;
+  struct segment_command* data;
+  struct section* data_const = 0;
+  lc = (struct load_command*)(base + sizeof(mach_header_t));
+
+  for (int i=0;i<((struct mach_header*)base)->ncmds; i++) {
+    if (lc->cmd == 0x1) {
+      sc = (struct segment_command*)lc;
+      switch(*((unsigned int *)&sc->segname[2])) {
+        case 0x41544144:
+          data = (struct segment_command*)lc;
+          break;
+      }
+    }
+    lc = (struct load_command *)((unsigned long)lc + lc->cmdsize);
+  }
+  data_const = data + 1;
+  for (int i=0; i<data->nsects; i++,data_const++) {
+    if (*(uint32_t*)&data_const->sectname[2] == 0x736e6f63) {
+      break;
+    }
+  }
+  uint32_t *dataConst = base + data_const->offset;
+
+  typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
+  typedef void* (*dlopen_ptr)(const char *filename, int flags);
+  dlsym_ptr dlsym_func = 0;
+  dlopen_ptr dlopen_func = 0;
+
+  typedef void (*func_ptr)();
+
+  while (!dlopen_func || !dlsym_func) {
+    if (string_compare((char*)(dataConst[0]), "__dyld_dlopen") == 0) {
+      dlopen_func = dataConst[1];
+    }
+    if (string_compare((char*)(dataConst[0]), "__dyld_dlsym") == 0) {
+      dlsym_func = dataConst[1];
+    }
+    dataConst += 2;
+  }
+
+  const char* libsystem_str = "/usr/lib/libSystem.B.dylib";
+  if (libsystem_str == NULL) {
+    func_ptr func = (func_ptr)0x45459999;
+    func();
+  }
+  void* libsystem = dlopen_func(libsystem_str, RTLD_NOW);
+
+  typedef int (*asl_log_ptr)(aslclient asl, aslmsg msg, int level, const char *format, ...);
+  asl_log_ptr asl_log_func = dlsym_func(libsystem, "asl_log");
+  asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
+
+  if (libsystem == NULL) {
+    func_ptr func = (func_ptr)0x45454545;
+    func();
+  }
+  if (dlsym_func == NULL) {
+    func_ptr func = (func_ptr)0x45457777;
+    func();
+  }
+  typedef int (*printf_ptr)(const char *format, ...);
+  printf_ptr printf_func = dlsym_func(libsystem, "printf");
+  if (printf_func == NULL) {
+    func_ptr func = (func_ptr)0x45455555;
+    func();
+  }
+
+  func_ptr func1 = (func_ptr)0x45451119;
+  func1();
+
+  printf_func("Hello world\n");
+
+  func_ptr func = (func_ptr)0x45456667;
+  func();
+
+  /*asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");*/
+  /*asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");*/
+  /*asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");*/
+  /*asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");*/
+
+
+}
