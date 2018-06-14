@@ -160,17 +160,6 @@ long syscall(const long syscall_number, const long arg1, const long arg2, const 
       : "=a"(ret)
       : "g"(syscall_number), "g"(arg1), "g"(arg2), "g"(arg3), "g"(arg4), "g"(arg5), "g"(arg6)    );
 #elif __arm__
-  /*write(1, arg2, 4);*/
-  /*asm volatile (*/
-      /*"mov r0, 1\n"*/
-      /*"mov r1, %1\n"*/
-      /*"mov r2, 4\n"*/
-      /*"mov r12, #4\n"*/
-      /*"swi 0x80\n"*/
-      /*"mov %0, r0\n"*/
-      /*: "=r"(ret)*/
-      /*: "r"(arg2)*/
-      /*: "r0", "r1", "r2", "r12");*/
   volatile register uint32_t r12 asm("r12") = syscall_number;
   volatile register uint32_t r0 asm("r0") = arg1;
   volatile register uint32_t r1 asm("r1") = arg2;
@@ -214,7 +203,6 @@ long syscall(const long syscall_number, const long arg1, const long arg2, const 
       "svc 0x80\n\t"
       "mov %0, x0\n\t"
       : "=r"(xret)
-      /*: "r"(syscall_number), "r"(arg1), "r"(arg2), "r"(arg3), "r"(arg4), "r"(arg5), "r"(arg6)*/
       : "r"(x16), "r"(x0), "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5)
       : "x0", "x1", "x2", "x3", "x4", "x5", "x16");
   ret = xret;
@@ -237,25 +225,18 @@ void * get_dyld_function(const char* function_symbol)
   uint64_t shared_region_start = syscall_shared_region_check_np();
 
   struct dyld_cache_header *header = (void*)shared_region_start;
-  /*printf("symbol %p\n", header);*/
-  /*printf("base %p\n", (void*)header->dyldBaseAddress);*/
-  /*fflush(stdout);*/
   struct shared_file_mapping *sfm = (void*)header + header->mappingOffset;
   struct dyld_cache_image_info *dcimg = (void*)header + header->imagesOffset;
   uint64_t libdyld_address;
   for (size_t i=0; i < header->imagesCount; i++) {
     char * pathFile = (char *)shared_region_start+dcimg->pathFileOffset;
-    //NSLog(@"pathFile %p %s\n", (void*)dcimg->address, pathFile);
-    /*if (string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {*/
     if (string_compare(pathFile, "/usr/lib/system/libdyld.dylib") == 0) {
-      //NSLog(@"dyld_address %p\n",  dcimg->address);
       libdyld_address = dcimg->address;
       break;
     }
     dcimg++;
   }
   void* vm_slide_offset  = (void*)header - sfm->address;
-  //NSLog(@"vm_slide_offset %p\n",  vm_slide_offset);
   libdyld_address = (libdyld_address + vm_slide_offset);
 
   mach_header_t *mh = (mach_header_t*)libdyld_address;
@@ -265,25 +246,19 @@ void * get_dyld_function(const char* function_symbol)
   segment_command_t* text_cmd = 0;
 
   for (uint32_t i = 0; i < mh->ncmds; ++i) {
-    //NSLog(@"line %d load %p %p", __LINE__, cmd->cmd, cmd);
     if (cmd->cmd == LC_SEGMENT_T) {
       segment_command_t* segment_cmd = (struct segment_command_t*)cmd;
       if (string_compare(segment_cmd->segname, SEG_TEXT) == 0) {
         text_cmd = segment_cmd;
-        /*NSLog(@"text_segment :%p %s %p %p %p %p:\n", segment_cmd, segment_cmd->segname, segment_cmd->vmaddr, segment_cmd->fileoff, segment_cmd->nsects, segment_cmd->cmd);*/
       } else if (string_compare(segment_cmd->segname, SEG_LINKEDIT) == 0) {
         linkedit_cmd = segment_cmd;
-        /*NSLog(@"linkedit :%p %p vmaddr %p fileoff %p:\n", linkedit_cmd, segment_cmd->segname, linkedit_cmd->vmaddr, linkedit_cmd->fileoff);*/
       }
     }
     if (cmd->cmd == LC_SYMTAB) {
       symtab_cmd = (struct symtab_command*)cmd;
-      /*NSLog(@"symtab :%p %d %p %p %p:\n", symtab_cmd, symtab_cmd->nsyms, symtab_cmd->symoff, symtab_cmd->stroff, symtab_cmd->strsize);*/
     }
     cmd = (const struct load_command*)(((char*)cmd)+cmd->cmdsize);
   }
-
-  /*printf("text_cmd %p\n", text_cmd);*/
 
   unsigned int file_slide = ((unsigned long)linkedit_cmd->vmaddr - (unsigned long)text_cmd->vmaddr) - linkedit_cmd->fileoff;
   nlist_t *sym = (nlist_t*)((unsigned long)mh + (symtab_cmd->symoff + file_slide));
@@ -292,11 +267,6 @@ void * get_dyld_function(const char* function_symbol)
   for (uint32_t i = 0; i < symtab_cmd->nsyms; ++i) {
     if (sym->n_un.n_strx) {
       char * symbol = strings + sym->n_un.n_strx;
-      /*printf("symbol %s\n", symbol);*/
-      if (function_symbol == 0) {
-      /*NSLog(@"symbol :%s %p:\n", symbol, sym->n_value);*/
-        /*printf_global("Symbol %s\n", symbol);*/
-      }
       if (string_compare(symbol, function_symbol) == 0) {
         return sym->n_value + vm_slide_offset;
       }
@@ -323,6 +293,7 @@ uint64_t find_macho(uint64_t addr, unsigned int increment, unsigned int pointer)
   return 0;
 }
 
+// Credits: http://blog.tihmstar.net/2018/01/modern-post-exploitation-techniques.html
 void resolve_dyld_symbol(uint32_t base, void** dlopen_pointer, void** dlsym_pointer)
 {
   struct load_command* lc;
