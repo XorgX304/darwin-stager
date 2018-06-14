@@ -39,41 +39,42 @@ typedef struct nlist nlist_t;
 
 struct dyld_cache_header
 {
-    char        magic[16];        // e.g. "dyld_v0     ppc"
-    uint32_t    mappingOffset;    // file offset to first shared_file_mapping
-    uint32_t    mappingCount;     // number of shared_file_mapping entries
-    uint32_t    imagesOffset;     // file offset to first dyld_cache_image_info
-    uint32_t    imagesCount;      // number of dyld_cache_image_info entries
-    uint64_t    dyldBaseAddress;  // base address of dyld when cache was built
-		uint64_t    codeSignatureOffset;
-		uint64_t    codeSignatureSize;
-		uint64_t    slideInfoOffset;
-		uint64_t    slideInfoSize;
-		uint64_t    localSymbolsOffset;
-		uint64_t    localSymbolsSize;
-		char        uuid[16];
+  char        magic[16];        // e.g. "dyld_v0     ppc"
+  uint32_t    mappingOffset;    // file offset to first shared_file_mapping
+  uint32_t    mappingCount;     // number of shared_file_mapping entries
+  uint32_t    imagesOffset;     // file offset to first dyld_cache_image_info
+  uint32_t    imagesCount;      // number of dyld_cache_image_info entries
+  uint64_t    dyldBaseAddress;  // base address of dyld when cache was built
+  uint64_t    codeSignatureOffset;
+  uint64_t    codeSignatureSize;
+  uint64_t    slideInfoOffset;
+  uint64_t    slideInfoSize;
+  uint64_t    localSymbolsOffset;
+  uint64_t    localSymbolsSize;
+  char        uuid[16];
 };
 
-struct shared_file_mapping {
-    uint64_t       address;
-    uint64_t       size;
-    uint64_t       file_offset;
-    uint32_t       max_prot;
-    uint32_t       init_prot;
+struct shared_file_mapping 
+{
+  uint64_t    address;
+  uint64_t    size;
+  uint64_t    file_offset;
+  uint32_t    max_prot;
+  uint32_t    init_prot;
 };
 
 struct dyld_cache_image_info
 {
-    uint64_t    address;
-    uint64_t    modTime;
-    uint64_t    inode;
-    uint32_t    pathFileOffset;
-    uint32_t    pad;
+  uint64_t    address;
+  uint64_t    modTime;
+  uint64_t    inode;
+  uint32_t    pathFileOffset;
+  uint32_t    pad;
 };
 
 long syscall(const long syscall_number, const long arg1, const long arg2, const long arg3, const long arg4, const long arg5, const long arg6);
 int main(int argc, char** argv);
-void * get_dyld_function(const char* function_symbol);
+void* get_dyld_function(const char* function_symbol);
 void resolve_dyld_symbol(uint32_t base, void** dlopen_pointer, void** dlsym_pointer);
 uint64_t syscall_chmod(uint64_t path, long mode);
 uint64_t syscall_shared_region_check_np();
@@ -93,10 +94,6 @@ void init()
   /*syscall_write(1, "lal\n", 4);*/
   /*printf("syscall_write done\n");*/
 
-  uint64_t start = DYLD_BASE_ADDRESS;
-  /*if (sierra) {*/
-  /*}*/
-  uint64_t dyld = find_macho(start, 0x1000, 0);
   /*printf("dyld %p\n", (void*)dyld);*/
 
   /*typedef void (*dyld_start_ptr)(struct macho_header* asl, int argc, char const**argv, int apple);*/
@@ -108,7 +105,17 @@ void init()
 
   void* dlopen_addr = 0;
   void* dlsym_addr = 0;
+
+#if __aarch64__
+  dlsym_addr = get_dyld_function("_dlsym");
+  dlopen_addr = get_dyld_function("_dlopen");
+#else
+  uint64_t start = DYLD_BASE_ADDRESS;
+  /*if (sierra) {*/
+  /*}*/
+  uint64_t dyld = find_macho(start, 0x1000, 0);
   resolve_dyld_symbol(dyld, &dlopen_addr, &dlsym_addr);
+#endif
 
   typedef void* (*dlopen_ptr)(const char *filename, int flags);
   typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
@@ -116,61 +123,9 @@ void init()
 
   dlopen_ptr dlopen_func = dlopen_addr;
   dlsym_ptr dlsym_func = dlsym_addr;
-
   void* libsystem = dlopen_func("/usr/lib/libSystem.B.dylib", RTLD_NOW);
   asl_log_ptr asl_log_func = dlsym_func(libsystem, "asl_log");
   asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
-
-  return;
-
-  /*uint64_t binary = find_macho(DYLD_BASE_ADDRESS, 0x1000, 0);*/
-  /*printf("binary %p\n", (void*)binary);*/
-  /*uint64_t firstlib = find_macho(dyld + 0x1000, 0x1000, 0);*/
-  /*printf("system %p\n", (void*)firstlib);*/
-  /*uint64_t shared_region_check = syscall_shared_region_check_np();*/
-  /*printf("shared %p\n", shared_region_check);*/
-  /*fflush(stdout);*/
-
-  /*uint64_t dlsym_addr = (uint64_t)get_dyld_function("_dlsym");*/
-  /*uint64_t dlopen_addr = (uint64_t)get_dyld_function("_dlopen");*/
-
-  /*typedef void* (*dlsym_ptr)(void *handle, const char *symbol);*/
-  /*typedef void* (*dlopen_ptr)(const char *filename, int flags);*/
-  /*typedef int (*asl_log_ptr)(aslclient asl, aslmsg msg, int level, const char *format, ...);*/
-  /*dlsym_ptr dlsym_func = dlsym_addr;*/
-  /*dlopen_ptr dlopen_func = dlopen_addr;*/
-  /*void* libsystem = dlopen_func("/usr/lib/libSystem.B.dylib", RTLD_NOW);*/
-  /*asl_log_ptr asl_log_func = dlsym_func(libsystem, "asl_log");*/
-  /*asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");*/
-
-  /*typedef int (*printf_ptr)(const char *format, ...);*/
-  /*printf_ptr printf_func = dlsym_func(libsystem, "printf");*/
-  /*printf_func("Hello world\n");*/
-
-  /*printf_global = printf_func;*/
-  /*printf_func("start %p\n", get_dyld_function("start"));*/
-  /*printf_func("_start %p\n", get_dyld_function("_start"));*/
-
-  /*print_dyld_function(printf_func);*/
-
-
-/*#ifdef __x86_64*/
-/*#ifdef __aarch64__*/
-  /*volatile register uint64_t x0 asm("x0") = 0x45454541;*/
-  /*volatile register uint64_t x1 asm("x1") = (uint64_t)dlsym_func;*/
-  /*volatile register uint64_t x2 asm("x2") = (uint64_t)libsystem;*/
-  /*volatile register uint64_t x3 asm("x3") = (uint64_t)asl_log_func;*/
-  /*volatile register uint64_t x4 asm("x4") = (uint64_t)0x79;*/
-  /*asm volatile (*/
-      /*"mov x0, %0\n\t"*/
-      /*"mov x1, %1\n\t"*/
-      /*"mov x2, %2\n\t"*/
-      /*"mov x3, %3\n\t"*/
-      /*"mov x4, %4\n\t"*/
-      /*:*/
-      /*: "r"(x0), "r"(x1), "r"(x2), "r"(x3), "r"(x4)*/
-      /*: "x0", "x1", "x2", "x3", "x4");*/
-/*#endif*/
 }
 
 uint32_t syscall_write(uint32_t fd, const char* buf, uint32_t size)
