@@ -19,10 +19,11 @@ main_ios: main.c
 
 main_ios32: main.c
 	$(GCC_IOS_32) -o $@ $^
-	ldid -S main_ios32
+	ldid -Sent.xml main_ios32
 
 log: log.c
 	$(GCC_IOS_32) -o $@ $^
+	ldid -S log
 
 shellcode: main_ios32
 	otool -tv main_ios32
@@ -38,6 +39,9 @@ main_vm: flatten main_ios
 
 main_vm32: flatten32 main_ios32
 	./flatten32 main_ios32 main_vm32
+
+log_vm32: flatten32 log
+	./flatten32 log log_vm32
 
 install: main_ios
 	cp main_ios ../../../../data/meterpreter/aarch64_iphone_darwin_stage
